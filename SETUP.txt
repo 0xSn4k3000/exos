@@ -1,0 +1,3 @@
+pip install -r requirements.txt
+
+MOVE sources.json to ~/.config/exos/sources.json

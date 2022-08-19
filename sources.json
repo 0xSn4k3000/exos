@@ -1,0 +1,35 @@
+[
+    {
+        "Git":{
+            ".git":"Index of /.git"
+        }
+    },
+    {
+        "SubVersion":{
+            ".svn":"Index of /.snv"
+        }
+    },
+    {
+        "Mercurial":{
+            ".hg":"Index of /.hg"
+        }
+    },
+    {
+        "Bazaar":{
+            ".bzr":"Index of /.bzr"
+        }
+    },
+    {
+        "Darcs":{
+            "._darcs":"Index of Darcs",
+            "darcs":"Index of /darcs",
+            "_darcs":"Index of /darcs"
+        }
+    },
+    {
+        "BitKeeper":{
+            "bitkeeper":"Index of /bitkeeper",
+            "plugins/bitkeeper":"Index of /plugins/bitkeeper"
+        }
+    }
+]

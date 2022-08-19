@@ -1,0 +1,204 @@
+#!/usr/bin/python3
+
+
+from random import random
+from sys import argv
+from getopt import getopt
+from json import load
+from time import perf_counter
+from urllib.parse import urljoin
+from requests import get
+from colorama import init
+from termcolor import colored
+from queue import Queue
+from threading import Thread
+from base64 import urlsafe_b64encode
+from os import path
+
+
+class main():
+
+	UrlsList 	= Queue()
+	Results  	= []
+	mResults 	= []
+	Threads  	= 2
+
+	OutputFile	= "output-" + str((urlsafe_b64encode(str(random()).encode())).decode())
+	mOutputFile = ""
+	SourcesFile = path.expanduser("~") + "/.config/exos/sources.json"
+	Sources 	= ""
+	RunningTime = 0
+	Done    	= False
+
+	def __init__(self):
+		init()
+		self.GetOptions()
+		self.LoadSourcesFile()
+		
+		if (self.Threads > self.UrlsList.qsize()) : self.Threads = self.UrlsList.qsize()
+		self.ShowSum()
+
+		ti = Thread(target=self.Inte)
+		ti.start()
+
+		start = perf_counter()
+
+		for i in range(self.Threads):
+			t = Thread(target=self.StartSearching())
+			t.start()
+
+		self.Done = True
+		end = perf_counter()
+		self.RunningTime = int(end - start)
+
+		self.PrintOutput()
+		self.ShowEndSum()
+
+
+
+
+
+	def GetOptions(self):
+		args , _ = getopt(argv[1:] , "u:f:t:o:h")
+		
+		if len(args) == 0 : self.Help()
+
+		for arg , val in args:
+			if arg in "-u":
+				self.UrlsList.put(val.rstrip("\n"))
+			elif arg in "-f":
+				self.LoadUrls(val)
+			elif arg in "-t":
+				self.Threads = int(val)
+			elif arg in "-o":
+				self.OutputFile = val
+			elif arg in "-h" or arg in "--help":
+				self.Help()
+	
+	def Inte(self):
+		psn = (len(self.Sources) * self.UrlsList.qsize())
+		while not self.Done:
+			cpn = (len(self.Sources) * self.UrlsList.qsize())
+			if cpn != 0:
+				prog = int((psn / cpn) * 10)
+				print("Progressing... {}%".format(prog) , end="\r")
+			else:
+				print("Almost done!...     " , end="\r")
+		print(colored(text="Done!          " , color="green" , attrs=["bold"]))
+	
+	def LoadUrls(self , fd):
+		self.showInfo(label="Loading Urls" , status="p")
+
+		with open(fd , "r") as file:
+			for line in file:
+				self.UrlsList.put(line.rstrip("\n"))
+		file.close()
+
+		self.showInfo(label="Loading Urls" , status="d")
+
+	
+	def PrintOutput(self):
+		self.mOutputFile = self.OutputFile + "-need_more_testing"
+
+		with open(self.OutputFile , "w") as of:
+			for url in self.Results:
+				of.write(url + "\n")
+		of.close()
+
+		with open(self.mOutputFile , "w") as of:
+			for url in self.mResults:
+				of.write(url + "\n")
+		of.close()
+
+	
+	def LoadSourcesFile(self):
+		self.showInfo(label="Loading Sources" , status="p")
+		
+		with open(self.SourcesFile , "r") as sf:
+			self.Sources = load(sf)
+		sf.close()
+
+		self.showInfo(label="Loading Sources" , status="d")
+
+	
+	
+	def showInfo(self , label , status):
+		if status == "p":
+			St  = colored(text="Prog" , color="blue" , attrs=["bold"])
+			End = "\r"
+		elif status == "d":
+			St  = colored(text="Done" , color="green" , attrs=["bold"])
+			End = "\n"
+		
+		print("{} [{}]".format(label , St) , end=End)
+
+
+
+	def ShowSum(self):
+		print("=" * 45)
+		print("Sources file   : {}".format(colored(text=self.SourcesFile , color="yellow" , attrs=["bold"])))
+		print("Number of Urls : {}".format(colored(text=self.UrlsList.qsize() , color="yellow" , attrs=["bold"])))
+		print("Threads        : {}".format(colored(text=self.Threads , color="yellow" , attrs=["bold"])))
+		print("Output file    : {}".format(colored(text=self.OutputFile , color="yellow" , attrs=["bold"])))
+		print("=" * 45)
+	
+
+	def ShowEndSum(self):
+		print("=" * 45)
+		print("Running time \t  : {}".format(colored(text=str(self.RunningTime) + "s" , color="yellow" , attrs=["bold"])))
+		print("Results\t\t  : {}".format(colored(text=len(self.Results) , color="yellow" , attrs=["bold"])))
+		print("Need More Testing : {}".format(colored(text=len(self.mResults) , color="yellow" , attrs=["bold"])))
+		print("Output File\t  : {}".format(colored(text=self.OutputFile , color="yellow" , attrs=["bold"])))
+		print("=" * 45)
+
+	def ShowResult(self , label , url , st):
+		if st == "Found":
+			status = colored(text="Found" , color="green" , attrs=["bold"])
+		elif st == "Manual":
+			status = colored(text="Manual Check" , color="blue" , attrs=["bold"])
+
+		print("{}{}{}  [{}]".format(colored(text=label , attrs=["bold"]) , self.FillSpace(label , 10) , url , status))
+
+	
+	
+	def FillSpace(self , text , max):
+		return (max - len(text)) * " "
+
+	
+	def Request(self , Url , Label , Poc):
+		try:
+			response = get(Url)
+			if response.status_code <= 400:
+				if (Poc.encode() or "Index of") in response.content:
+					self.ShowResult(Label , Url , "Found")
+					self.Results.append(Url)
+				else:
+					self.ShowResult(Label , Url , "Manual")
+					self.mResults.append(Url)
+		except:
+			pass
+	
+	
+	def StartSearching(self):
+		while not self.UrlsList.empty():
+			URL = self.UrlsList.get()
+			self.UrlsList.task_done()
+			for DevComp in self.Sources:
+				for Label in DevComp:
+					for key in DevComp[Label]:
+						EndPoint = key
+						Poc = DevComp[Label][key]
+						self.Request(urljoin(URL , EndPoint) , Label , Poc)
+
+
+	def Help(self):
+		print("""Exos is a tool for finding Dev components and exposed source codes.
+Usage:
+	-h, --help	Help
+	-u URL 		Target Url.
+	-f File		Urls file.
+	-t THREADS     	Number of concurrent threads. (default: 2)	
+	-o TEXT_FILE 	Path for text output file.""")
+		exit(0)
+	
+start = main()
